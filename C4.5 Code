@@ -1,0 +1,79 @@
+import numpy as np
+import pandas as pd
+def Ent(dataframe:pd.DataFrame, feature:str):
+    #当特征不为judge时候
+    if feature != 'judge':
+        #根据特征的值进行分组
+        grouped_data = dataframe.groupby(feature)
+        #计算dataframe的总样本数量
+        total_len = len(dataframe.index)
+        #创建列表存储每一组的ent值和该组的样本数k
+        group_ent_lst = []
+        group_len_lst = []
+        #遍历每一组计算每一组的ent值
+        for name, group in grouped_data:
+            group_len_lst.append(len(group.index))
+            #利用透视表获取每一组里面不同judge的样本数量a
+            pt = pd.pivot_table(group, index='judge', aggfunc='count')
+            #创建链表存储该组的 -plog2p 的值以便求和
+            negative_plog2p = []
+            #遍历计算该组的不同judge的 -plog2p 的值
+            for j in range(len(pt['color'].values)):
+                #不一定是color列，只不过透视表的每一列数据都一样所以任意取了一列
+                p = pt['color'].values[j] / len(group)
+                negative_plog2p.append(-(p * np.log2(p)))
+            #计算该组
+            group_ent_lst.append(sum(negative_plog2p))
+        #以该特征下的 “每组样本数量/总样本量” 作为权重对每组的ent进行求数学期望，以此计算该特征feature的ent值并返回
+        group_ent = 0
+        for i in range(len(group_ent_lst)):
+            group_ent += (group_len_lst[i] / total_len) * group_ent_lst[i]
+        return group_ent
+    #当特征为judge时候
+    else:
+        #可以直接掠过依据特征进行分类的步骤，直接求其ent
+        pt = pd.pivot_table(dataframe, index='judge', aggfunc='count')
+        negative_plog2p = []
+        for j in range(len(pt['color'].values)):
+            p = pt['color'].values[j] / len(dataframe.index)
+            negative_plog2p.append(-(p * np.log2(p)))
+        return sum(negative_plog2p)
+
+def VI(dataframe:pd.DataFrame,feature):
+    grouped_data = dataframe.groupby(feature)
+    total_len = len(dataframe.index)
+    negative_plog2p = []
+    for name,group in grouped_data:
+        pt = pd.pivot_table(group, index='judge', aggfunc='count')
+        for j in range(len(pt['color'].values)):
+            p = pt['color'].values[j] / total_len
+            negative_plog2p.append(-(p * np.log2(p)))
+    return sum(negative_plog2p)
+
+if __name__ == '__main__':
+    #创建西瓜数据集
+    data_len = 100
+    judge = np.zeros(data_len) #瓜的好坏
+    root = np.zeros(data_len)  #根部状态
+    color = np.zeros(data_len) #颜色
+    sound = np.zeros(data_len) #声音
+    touch = np.zeros(data_len) #触感
+    #给每个特征随机赋值
+    for i in range(0,data_len):
+        judge[i] = int(np.random.randint(0,2))
+        root[i] = int(np.random.randint(0,3))
+        color[i] = int(np.random.randint(0,5))
+        sound[i] = int(np.random.randint(0,6))
+        touch[i] = int(np.random.randint(0,4))
+    #转成dataframe
+    Dataset = {'judge':judge,'root':root,'color':color,'sound':sound,'touch':touch}
+    features = ['root','color','sound','touch']
+    dataframe = pd.DataFrame(Dataset)
+    #构建ID3
+    lst = np.zeros(len(features))
+    i = 0
+    for feature in features:
+        lst[i] = Ent(dataframe, feature)
+        Infor_Increase = Ent(dataframe, 'judge') - lst[i]
+        vi = - VI(dataframe, feature)
+        print(f"feature:{feature}, Gain: {Infor_Increase/vi}")
