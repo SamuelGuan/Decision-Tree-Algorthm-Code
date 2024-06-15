@@ -1,0 +1,98 @@
+import numpy as np
+import pandas as pd
+
+class Gini_class(object):
+    def __init__(self,dataset:pd.DataFrame):
+        self.Gini_D = 0
+        self.dataset_len = len(dataset)
+        self.Gini(dataset, 'judge')
+    def Gini(self,dataset:pd.DataFrame, feature:str):
+        Gini_index = 0
+        grouped_data = dataset.groupby(feature)
+        group_num = 0
+        each_group_len_lst = []
+        name_list = []
+        for name,group in grouped_data:
+            group_num += 1
+            name_list.append(name)
+            each_group_len_lst.append(len(group.index))
+
+        if feature != 'judge':
+            for i in range(group_num):
+                Gini_index += (each_group_len_lst[i]/self.dataset_len) * self.Gini_D
+            #返回值是number、、DataFrameGrouped对象
+            return Gini_index, grouped_data
+
+        else:
+            for i in range(group_num):
+                Gini_index += (each_group_len_lst[i]/self.dataset_len)**2
+            self.Gini_D = 1 - Gini_index
+
+class CART_class(object):
+    def __init__(self, Gini_object):
+        #锁定Gini实例化对象 和 创建 Tree 字典用于存储分类好的数据
+        #利用实例化对象暂存在电脑内存或者缓存中的特性来进行存储已经规划好的树节点
+        self.Gini_object = Gini_object
+        self.Tree = {}
+    def CART(self,dataset:pd.DataFrame, features:list):
+        #利用迭代实现树的子节点的创建
+        #停止迭代条件为所有属性都被使用
+        #由于任务是分类与回归，所以不必把树升级为B树
+        if len(features) != 0 :
+            gini_dict = {}
+            #利用非实例对象属性在每次函数运行时都会创建，在函数结束时被释放的特性优化内存
+            group_data_dict = {}
+            #遍历传进来的features列表
+            for feature in features:
+                #计算该特征的Gini指数并存储在字典之中，以便后续寻找最小值及其特征名字
+                gini_index, group_data = self.Gini_object.Gini(dataset,feature)
+                gini_dict[feature] = gini_index
+                #将分类好的节点存入非实例对象属性的一个字典group_data_dict，优化CART对象的内存占用
+                #同时以便将最小Gini指数所对应的分组好的数据找出与存储在实例对象属性之中
+                group_data_dict[feature] = group_data
+            #找出Gini指数最小的叶节点
+            min_gini_index = min(gini_dict, key=gini_dict.get)
+            #将该叶节点添加入Tree列表中存储
+            self.Tree[min_gini_index] = group_data_dict[min_gini_index]
+            #剔除Gini指数最小的叶节点对应的特征名，以便子节点创建时候不必再去遍历，从而优化内存与计算时间
+            features.remove(min_gini_index)
+            #通过迭代创建叶（根）子节点，同时将分好组的各组数据依次传入。
+            #由于group_data_dict[min_gini_index]是DataFrameGrouped对象,不为DataFrame格式，只能依次传入
+            for name,group in group_data_dict[min_gini_index]:
+                self.CART(group, features)
+        else:
+            return self.Tree
+
+    def ShowTree(self):
+        for key,Node in self.Tree.items():
+            print(f'This node is {key}, and grouped data as followings')
+            for name,group in Node:
+                print(group)
+            print('-'*100)
+
+
+
+if __name__ == '__main__':
+    # 创建西瓜数据集
+    data_len = 100
+    judge = np.zeros(data_len)  # 瓜的好坏
+    root = np.zeros(data_len)  # 根部状态
+    color = np.zeros(data_len)  # 颜色
+    sound = np.zeros(data_len)  # 声音
+    touch = np.zeros(data_len)  # 触感
+    # 给每个特征随机赋值
+    for i in range(0, data_len):
+        judge[i] = int(np.random.randint(0, 2))
+        root[i] = int(np.random.randint(0, 3))
+        color[i] = int(np.random.randint(0, 5))
+        sound[i] = int(np.random.randint(0, 6))
+        touch[i] = int(np.random.randint(0, 4))
+    # 转成dataframe
+    Dataset = {'judge': judge, 'root': root, 'color': color, 'sound': sound, 'touch': touch}
+    features = ['root', 'color', 'sound', 'touch']
+    dataframe = pd.DataFrame(Dataset)
+    #构建CART
+    G = Gini_class(dataframe)
+    Cart = CART_class(G)
+    Cart.CART(dataframe,features)
+    Cart.ShowTree()
